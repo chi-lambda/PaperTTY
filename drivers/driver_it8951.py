@@ -96,9 +96,7 @@ class IT8951(DisplayDriver):
         self.spi_write([0x00, 0x00])
         self.wait_for_ready()
         for i in range(0, len(data), max_transfer_size):
-            now = time.time()
             self.spi_write(data[i: i + max_transfer_size])
-            print("sending {} bytes t SPI took {} seconds".format(max_transfer_size, time.time()-now))
         GPIO.output(self.CS_PIN, GPIO.HIGH)
 
     def read_bytes(self, n):
@@ -375,9 +373,8 @@ class IT8951(DisplayDriver):
         packdll = ctypes.cdll.LoadLibrary('./pack.so')
         packdll.pack_image.argtypes = [ctypes.py_object, ctypes.POINTER(ctypes.c_ubyte)]
         packdll.pack_image(img_data, packed_buffer)
-        packed_list = [x for x in packed_buffer]
         print("Packing took {} seconds".format(time.time() - now))
-        return packed_list
+        return packed_buffer
 
     def pack_image_old(self, image):
         """Packs a PIL image for transfer over SPI to the driver board."""
