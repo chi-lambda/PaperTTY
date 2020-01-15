@@ -90,7 +90,7 @@ class IT8951(DisplayDriver):
         GPIO.output(self.CS_PIN, GPIO.HIGH)
 
     def write_data_bytes(self, data):
-        max_transfer_size = 4096 * 2
+        max_transfer_size = 4096
         self.wait_for_ready()
         GPIO.output(self.CS_PIN, GPIO.LOW)
         self.spi_write([0x00, 0x00])
