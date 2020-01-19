@@ -286,10 +286,8 @@ class IT8951(DisplayDriver):
         PackedBufferType = ctypes.c_ubyte * (pixel_count // 2)
         packed_buffer = PackedBufferType()
 
-        now = time.time()
         packdll = ctypes.cdll.LoadLibrary('./pack.so')
         packdll.pack_image.argtypes = [ctypes.py_object, ctypes.POINTER(ctypes.c_ubyte)]
         packdll.pack_image(img_data, packed_buffer)
-        print("Packing took {} seconds".format(time.time() - now))
 
         return packed_buffer
