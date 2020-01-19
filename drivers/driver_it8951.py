@@ -263,10 +263,8 @@ class IT8951(DisplayDriver):
         self.write_data_half_word(height)
 
         packed_image = self.pack_image(image)
-        now = time.time()
         self.write_data_bytes(packed_image)
-        print("Sending draw command of {}x{} took {} sec.".format(width, height, time.time() - now))
-        self.write_command(self.CMD_LOAD_IMAGE_END);
+        self.write_command(self.CMD_LOAD_IMAGE_END)
 
         if update_mode_override is not None:
             update_mode = update_mode_override
@@ -278,95 +276,14 @@ class IT8951(DisplayDriver):
             # Use a slower, flashy update mode for gray scale images.
             update_mode = self.DISPLAY_UPDATE_MODE_GC16
         # Blit the image to the display
-        now = time.time()
         self.display_area(x, y, width, height, update_mode)
-        print("Drawing of {}x{} took {} sec.".format(width, height, time.time() - now))
-
-    def pack_image_new(self, image):
-        """Packs a PIL image for transfer over SPI to the driver board."""
-
-        if image.mode == '1':
-            # B/W pictured can be processed more quickly
-
-            img_data = image.getdata()
-            pixel_count = len(img_data)
-
-            FrameBufferType = ctypes.c_ubyte * pixel_count
-            PackedBufferType = ctypes.c_ubyte * (pixel_count // 2)
-
-            frame_buffer = FrameBufferType(*img_data)
-            packed_buffer = PackedBufferType()
-
-            # For now, only 4 bit packing is supported. Theoretically we could
-            # achieve a transfer speed up by using 2 bit packing for black and white
-            # images. However, 2bpp doesn't seem to play well with the DU rendering
-            # mode.
-
-            # The driver board assumes all data is read in as 16bit ints. To match
-            # the endianness every pair of bytes must be swapped.
-            # The image is always padded to a multiple of 8, so we can safely go in steps of 4.
-
-            now = time.time()
-            for i in range(0, len(frame_buffer), 4):
-                if frame_buffer[i + 2] and frame_buffer[i + 3]:
-                    packed_buffer[i // 2] = 0xFF
-                elif frame_buffer[i + 2]:
-                    packed_buffer[i // 2] = 0x0F
-                elif frame_buffer[i + 3]:
-                    packed_buffer[i // 2] = 0xF0
-                else:
-                    packed_buffer[i // 2] = 0
-
-                if frame_buffer[i] and frame_buffer[i + 1]:
-                    packed_buffer[i // 2 + 1] = 0xFF
-                elif frame_buffer[i]:
-                    packed_buffer[i // 2 + 1] = 0x0F
-                elif frame_buffer[i + 1]:
-                    packed_buffer[i // 2 + 1] = 0xF0
-                else:
-                    packed_buffer[i // 2 + 1] = 0
-            
-            print("Packing took {} seconds".format(time.time() - now))
-            return packed_buffer
-        else:
-            # old packing code for grayscale (VNC)
-            image_grey = image.convert("L")
-            img_data = image_grey.getdata()
-            pixel_count = len(img_data)
-
-            FrameBufferType = ctypes.c_ubyte * pixel_count
-            PackedBufferType = ctypes.c_ubyte * (pixel_count // 2)
-
-            frame_buffer = FrameBufferType(*img_data)
-            packed_buffer = PackedBufferType()
-
-
-            # For now, only 4 bit packing is supported. Theoretically we could
-            # achieve a transfer speed up by using 2 bit packing for black and white
-            # images. However, 2bpp doesn't seem to play well with the DU rendering
-            # mode.
-
-            # The driver board assumes all data is read in as 16bit ints. To match
-            # the endianness every pair of bytes must be swapped.
-            # The image is always padded to a multiple of 8, so we can safely go in steps of 4.
-            for i in range(0, len(frame_buffer), 4):
-                # Values are in the range 0..255, so we don't need to "and" after we shift
-                packed_buffer[i // 2] = (frame_buffer[i + 2] >> 4) | (frame_buffer[i + 3] & 0xF0)
-                packed_buffer[i // 2 + 1] = (frame_buffer[i] >> 4) | (frame_buffer[i + 1] & 0xF0)
-
-            return packed_buffer
 
     def pack_image(self, image):
         image_grey = image.convert("L")
         img_data = image_grey.getdata()
         pixel_count = len(img_data)
 
-        #FrameBufferType = ctypes.c_ubyte * pixel_count
         PackedBufferType = ctypes.c_ubyte * (pixel_count // 2)
-
-        #now = time.time()
-        #frame_buffer = FrameBufferType(*img_data)
-        #print("Initializing frame buffer took {} seconds".format(time.time() - now))
         packed_buffer = PackedBufferType()
 
         now = time.time()
@@ -374,60 +291,5 @@ class IT8951(DisplayDriver):
         packdll.pack_image.argtypes = [ctypes.py_object, ctypes.POINTER(ctypes.c_ubyte)]
         packdll.pack_image(img_data, packed_buffer)
         print("Packing took {} seconds".format(time.time() - now))
+
         return packed_buffer
-
-    def pack_image_old(self, image):
-        """Packs a PIL image for transfer over SPI to the driver board."""
-        if image.mode == '1':
-            # B/W pictured can be processed more quickly
-            frame_buffer = list(image.getdata())
-
-            # For now, only 4 bit packing is supported. Theoretically we could
-            # achieve a transfer speed up by using 2 bit packing for black and white
-            # images. However, 2bpp doesn't seem to play well with the DU rendering
-            # mode.
-            packed_buffer = []
-            # The driver board assumes all data is read in as 16bit ints. To match
-            # the endianness every pair of bytes must be swapped.
-            # The image is always padded to a multiple of 8, so we can safely go in steps of 4.
-            now = time.time()
-            for i in range(0, len(frame_buffer), 4):
-                if frame_buffer[i + 2] and frame_buffer[i + 3]:
-                    packed_buffer += [0xFF]
-                elif frame_buffer[i + 2]:
-                    packed_buffer += [0x0F]
-                elif frame_buffer[i + 3]:
-                    packed_buffer += [0xF0]
-                else:
-                    packed_buffer += [0]
-
-                if frame_buffer[i] and frame_buffer[i + 1]:
-                    packed_buffer += [0xFF]
-                elif frame_buffer[i]:
-                    packed_buffer += [0x0F]
-                elif frame_buffer[i + 1]:
-                    packed_buffer += [0xF0]
-                else:
-                    packed_buffer += [0]
-            print("Packing took {} seconds".format(time.time() - now))
-            return packed_buffer
-        else:
-            # old packing code for grayscale (VNC)
-            image_grey = image.convert("L")
-            frame_buffer = list(image_grey.getdata())
-
-            # For now, only 4 bit packing is supported. Theoretically we could
-            # achieve a transfer speed up by using 2 bit packing for black and white
-            # images. However, 2bpp doesn't seem to play well with the DU rendering
-            # mode.
-            packed_buffer = []
-
-            # The driver board assumes all data is read in as 16bit ints. To match
-            # the endianness every pair of bytes must be swapped.
-            # The image is always padded to a multiple of 8, so we can safely go in steps of 4.
-            for i in range(0, len(frame_buffer), 4):
-                # Values are in the range 0..255, so we don't need to "and" after we shift
-                packed_buffer += [(frame_buffer[i + 2] >> 4) | (frame_buffer[i + 3] & 0xF0)]
-                packed_buffer += [(frame_buffer[i] >> 4) | (frame_buffer[i + 1] & 0xF0)]
-
-            return packed_buffer
