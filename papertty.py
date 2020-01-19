@@ -53,9 +53,8 @@ class PaperTTY:
     fontsize = None
     white = None
     black = None
-    encoding = None
 
-    def __init__(self, driver, font=defaultfont, fontsize=defaultsize, partial=None, encoding='utf-8'):
+    def __init__(self, driver, font=defaultfont, fontsize=defaultsize, partial=None):
         """Create a PaperTTY with the chosen driver and settings"""
         self.driver = get_drivers()[driver]['class']()
         self.font = self.load_font(font, fontsize) if font else None
@@ -63,7 +62,6 @@ class PaperTTY:
         self.partial = partial
         self.white = self.driver.white
         self.black = self.driver.black
-        self.encoding = encoding
 
     def ready(self):
         """Check that the driver is loaded and initialized"""
@@ -131,6 +129,11 @@ class PaperTTY:
     def ttydev(vcsa):
         """Return associated tty for vcsa device, ie. /dev/vcsa1 -> /dev/tty1"""
         return vcsa.replace("vcsa", "tty")
+    
+    @staticmethod
+    def vcsudev(vcsa):
+        """Return associated vcsu for vcsa device, ie. /dev/vcsa1 -> /dev/vcsu1"""
+        return vcsa.replace("vcsa", "vcsu")
 
     @staticmethod
     def valid_vcsa(vcsa):
@@ -259,7 +262,7 @@ class PaperTTY:
                 cur_x, cur_y = cursor[0], cursor[1]
                 # get the width of the character under cursor
                 # (in case we didn't use a fixed width font...)
-                fw = self.font.getsize(chr(cursor[2]))[0]
+                fw = self.font.getsize(cursor[2])[0]
                 # desired cursor width
                 cur_width = fw - 1
                 # get font height
@@ -332,9 +335,8 @@ def get_driver_list():
 @click.group()
 @click.option('--driver', default=None, help='Select display driver')
 @click.option('--nopartial', is_flag=True, default=False, help="Don't use partial updates even if display supports it")
-@click.option('--encoding', default='utf-8', help='Encoding to use for the buffer', show_default=True)
 @click.pass_context
-def cli(ctx, driver, nopartial, encoding):
+def cli(ctx, driver, nopartial):
     """Display stdin or TTY on a Waveshare e-Paper display"""
     if not driver:
         PaperTTY.error(
@@ -344,7 +346,7 @@ def cli(ctx, driver, nopartial, encoding):
         matched_drivers = [n for n in get_drivers() if n.lower() == driver.lower()]
         if not matched_drivers:
             PaperTTY.error('Invalid driver selection, choose from:\n{}'.format(get_driver_list()))
-        ctx.obj = Settings(driver=matched_drivers[0], partial=not nopartial, encoding=encoding)
+        ctx.obj = Settings(driver=matched_drivers[0], partial=not nopartial)
     pass
 
 
@@ -475,32 +477,32 @@ def terminal(settings, vcsa, font, fontsize, noclear, nocursor, sleep, ttyrows, 
                 oldbuff = ''
                 flags['scrub_requested'] = False
             with open(vcsa, 'rb') as f:
-                # read the first 4 bytes to get the console attributes
-                attributes = f.read(4)
-                rows, cols, x, y = list(map(ord, struct.unpack('cccc', attributes)))
+                with open(ptty.vcsudev(vcsa), 'rb') as vcsu:
+                    # read the first 4 bytes to get the console attributes
+                    attributes = f.read(4)
+                    rows, cols, x, y = list(map(ord, struct.unpack('cccc', attributes)))
 
-                # read rest of the console content into buffer
-                buff = f.read()
-                # SKIP all the attribute bytes
-                # (change this (and write more code!) if you want to use the attributes with a
-                # three-color display)
-                buff = buff[0::2]
-                # find character under cursor (in case using a non-fixed width font)
-                char_under_cursor = buff[y * rows + x]
-                cursor = (x, y, char_under_cursor)
-                # add newlines per column count
-                buff = ''.join([r.decode(ptty.encoding, 'ignore') + '\n' for r in ptty.split(buff, cols)])
-                # do something only if content has changed or cursor was moved
-                if buff != oldbuff or cursor != oldcursor:
-                    # show new content
-                    oldimage = ptty.showtext(buff, fill=ptty.black, cursor=cursor if not nocursor else None,
-                                             oldimage=oldimage,
-                                             **textargs)
-                    oldbuff = buff
-                    oldcursor = cursor
-                else:
-                    # delay before next update check
-                    time.sleep(float(sleep))
+                    # read rest of the console content into buffer
+                    buff = vcsu.read()
+                    # # SKIP all the attribute bytes
+                    # # (change this (and write more code!) if you want to use the attributes with a
+                    # # three-color display)
+                    # find character under cursor (in case using a non-fixed width font)
+                    char_under_cursor = buff[4 * (y * rows + x):4 * (y * rows + x + 1)]
+                    cursor = (x, y, char_under_cursor.decode('utf_32', 'ignore'))
+                    # add newlines per column count
+                    buff = ''.join([r.decode('utf_32', 'replace') + '\n' for r in ptty.split(buff, cols*4)])
+                    # do something only if content has changed or cursor was moved
+                    if buff != oldbuff or cursor != oldcursor:
+                        # show new content
+                        oldimage = ptty.showtext(buff, fill=ptty.black, cursor=cursor if not nocursor else None,
+                                                oldimage=oldimage,
+                                                **textargs)
+                        oldbuff = buff
+                        oldcursor = cursor
+                    else:
+                        # delay before next update check
+                        time.sleep(float(sleep))
 
 
 if __name__ == '__main__':
