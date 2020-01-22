@@ -4,10 +4,6 @@
 
 On systems with /dev/vcsu* (e.g. Raspbian Buster) and when using a TrueType font, the `terminal` mode now has full support for Unicode output. This is automatic, with a fallback to 8-bit if either of these requirements isn't met. We've also changed the standard encoding for 8-bit to ISO-8859-1, which should be a little closer to what the `vcs` device provides.
 
-## Optimizations in C (2020-01-05)
-
-The packing algorithm has been reimplemented in C, which sped things up even more. It can be found in the `c-packing` branch. The next frontier would be speeding up the sending of data via SPI.
-
 ## IT8951 Optimization II *(2020-01-15)*
 
 The previous optimization was improved further to speed up VNC output too. If you try it, please leave a comment at https://github.com/joukos/PaperTTY/issues/32 (and create a new issue if there's problems).
@@ -15,6 +11,10 @@ The previous optimization was improved further to speed up VNC output too. If yo
 ## IT8951 Optimization *(2020-01-11)*
 
 An optimization by @chi-lambda for the IT8951 driver was merged and may speed up the bit-packing in TTY mode even by up to **10x** for these displays, so the refresh rates should be significantly better now. Please create an issue if there are problems (the unoptimized version can be checked out with the tag `v0.03_unoptimized`).
+
+## Optimizations in C (2020-01-05)
+
+The packing algorithm has been reimplemented in C, which sped things up even more. It can be found in the `c-packing` branch. The next frontier would be speeding up the sending of data via SPI.
 
 ## IT8951 Update *(2019-11-03)*
 
