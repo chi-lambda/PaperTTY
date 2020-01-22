@@ -1,5 +1,9 @@
 # PaperTTY
 
+## Unicode Update *(2020-01-22)*
+
+On systems with /dev/vcsu* (e.g. Raspbian Buster) and when using a TrueType font, the `terminal` mode now has full support for Unicode output. This is automatic, with a fallback to 8-bit if either of these requirements isn't met. We've also changed the standard encoding for 8-bit to ISO-8859-1, which should be a little closer to what the `vcs` device provides.
+
 ## Optimizations in C (2020-01-05)
 
 The packing algorithm has been reimplemented in C, which sped things up even more. It can be found in the `c-packing` branch. The next frontier would be speeding up the sending of data via SPI.
