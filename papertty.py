@@ -219,7 +219,7 @@ class PaperTTY:
             for x in range(self.ttycols):
                 current_attr = attributes[y * self.ttycols + x]
                 # if foreground is not black, do black background
-                if (current_attr & 0x0F):
+                if (current_attr & 0x0F) or (current_attr == 0):
                     upper_left = (self.font_width * x, (self.font_height) * y)
                     lower_right = (self.font_width * (x + 1), (self.font_height) * (y + 1))
                     draw.rectangle([upper_left, lower_right], fill=self.black)
