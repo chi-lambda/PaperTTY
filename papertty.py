@@ -205,7 +205,7 @@ class PaperTTY:
     def fit(self, portrait=False):
         """Return the maximum columns and rows we can display with this font"""
         width = self.font.getsize('M')[0]
-        height = self.font_height + self.spacing
+        height = self.font_height
         # hacky, subtract just a bit to avoid going over the border with small fonts
         pw = self.driver.width - 3
         ph = self.driver.height
@@ -274,7 +274,7 @@ class PaperTTY:
                 previous_vnc_image = new_vnc_image.copy()
                 time.sleep(float(sleep))
 
-    def showtext(self, text, fill, cursor=None, portrait=False, flipx=False, flipy=False, oldimage=None, spacing=0):
+    def showtext(self, text, attributes, fill, cursor=None, portrait=False, flipx=False, flipy=False, oldimage=None):
         """Draw a string on the screen"""
         if self.ready():
             # set order of h, w according to orientation
