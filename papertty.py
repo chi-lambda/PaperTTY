@@ -56,7 +56,6 @@ class PaperTTY:
     white = None
     black = None
     encoding = None
-    spacing = 0
 
     def __init__(self, driver, font=defaultfont, fontsize=defaultsize, partial=None, encoding='utf-8', spacing=0):
         """Create a PaperTTY with the chosen driver and settings"""
@@ -92,11 +91,12 @@ class PaperTTY:
         print(msg)
         sys.exit(code)
 
-    @staticmethod
-    def set_tty_size(tty, rows, cols):
+    def set_tty_size(self, tty, rows, cols):
         """Set a TTY (/dev/tty*) to a certain size. Must be a real TTY that support ioctls."""
+        self.ttycols = int(cols)
+        self.ttyrows = int(rows)
         with open(tty, 'w') as tty:
-            size = struct.pack("HHHH", int(rows), int(cols), 0, 0)
+            size = struct.pack("HHHH", self.ttyrows, self.ttycols, 0, 0)
             try:
                 fcntl.ioctl(tty.fileno(), termios.TIOCSWINSZ, size)
             except OSError:
@@ -211,6 +211,20 @@ class PaperTTY:
         ph = self.driver.height
         return int((pw if portrait else ph) / width), int((ph if portrait else pw) / height)
 
+    def create_attr_mask(self, attributes, portrait):
+        mask = Image.new('1', (self.driver.width, self.driver.height) if portrait else (
+                self.driver.height, self.driver.width), self.white)
+        draw = ImageDraw.Draw(mask)
+        for y in range(self.ttyrows):
+            for x in range(self.ttycols):
+                current_attr = attributes[y * self.ttycols + x]
+                # if foreground is not black, do black background
+                if (current_attr & 0x0F):
+                    upper_left = (self.font_width * x, (self.font_height) * y)
+                    lower_right = (self.font_width * (x + 1), (self.font_height) * (y + 1))
+                    draw.rectangle([upper_left, lower_right], fill=self.black)
+        return mask
+
     def showvnc(self, host, display, password=None, rotate=None, invert=False, sleep=1, full_interval=100):
         with api.connect(':'.join([host, display]), password=password) as client:
             previous_vnc_image = None
@@ -260,7 +274,7 @@ class PaperTTY:
                 previous_vnc_image = new_vnc_image.copy()
                 time.sleep(float(sleep))
 
-    def showtext(self, text, fill, cursor=None, portrait=False, flipx=False, flipy=False, oldimage=None):
+    def showtext(self, text, attributes, fill, cursor=None, portrait=False, flipx=False, flipy=False, oldimage=None):
         """Draw a string on the screen"""
         if self.ready():
             # set order of h, w according to orientation
@@ -290,6 +304,10 @@ class PaperTTY:
             # rotate image if using landscape
             if not portrait:
                 image = image.rotate(90, expand=True)
+
+            if attributes:
+                attr_mask = self.create_attr_mask(attributes, portrait)
+                image = ImageChops.logical_xor(image, attr_mask)
             # apply flips if desired
             if flipx:
                 image = image.transpose(Image.FLIP_LEFT_RIGHT)
@@ -438,9 +456,10 @@ def vnc(settings, host, display, password, rotate, invert, sleep, fullevery):
 @click.option('--scrub', 'apply_scrub', is_flag=True, default=False, help='Apply scrub when starting up',
               show_default=True)
 @click.option('--autofit', is_flag=True, default=False, help='Autofit terminal size to font size', show_default=True)
+@click.option('--attributes', is_flag=True, default=False, help='Use attributes', show_default=True)
 @click.pass_obj
 def terminal(settings, vcsa, font, fontsize, noclear, nocursor, sleep, ttyrows, ttycols, portrait, flipx, flipy,
-             spacing, apply_scrub, autofit):
+             spacing, apply_scrub, autofit, attributes):
     """Display virtual console on an e-Paper display, exit with Ctrl-C."""
     settings.args['font'] = font
     settings.args['fontsize'] = fontsize
@@ -452,6 +471,8 @@ def terminal(settings, vcsa, font, fontsize, noclear, nocursor, sleep, ttyrows, 
     oldbuff = ''
     oldimage = None
     oldcursor = None
+    attributes = True
+    oldattributes = []
     # dirty - should refactor to make this cleaner
     flags = {'scrub_requested': False}
 
@@ -494,11 +515,11 @@ def terminal(settings, vcsa, font, fontsize, noclear, nocursor, sleep, ttyrows, 
                 oldimage = None
                 oldbuff = ''
                 flags['scrub_requested'] = False
-            with open(vcsa, 'rb') as f:
+            with open(vcsa, 'rb') as vcs_attributes:
                 with open(vcsudev, 'rb') as vcsu:
                     # read the first 4 bytes to get the console attributes
-                    attributes = f.read(4)
-                    rows, cols, x, y = list(map(ord, struct.unpack('cccc', attributes)))
+                    dimensions = vcs_attributes.read(4)
+                    rows, cols, x, y = list(map(ord, struct.unpack('cccc', dimensions)))
 
                     # read from the text buffer 
                     buff = vcsu.read()
@@ -511,14 +532,21 @@ def terminal(settings, vcsa, font, fontsize, noclear, nocursor, sleep, ttyrows, 
                     cursor = (x, y, char_under_cursor.decode(encoding, 'ignore'))
                     # add newlines per column count
                     buff = ''.join([r.decode(encoding, 'replace') + '\n' for r in ptty.split(buff, cols * character_width)])
+
+                    attr = None
+                    if attributes:
+                        attr = vcs_attributes.read()
+                        attr = attr[1::2]
                     # do something only if content has changed or cursor was moved
-                    if buff != oldbuff or cursor != oldcursor:
+                    if buff != oldbuff or cursor != oldcursor or attr != oldattributes:
                         # show new content
-                        oldimage = ptty.showtext(buff, fill=ptty.black, cursor=cursor if not nocursor else None,
+                        oldimage = ptty.showtext(buff, fill=ptty.black, attributes=attr,
+                                                cursor=cursor if not nocursor else None,
                                                 oldimage=oldimage,
                                                 **textargs)
                         oldbuff = buff
                         oldcursor = cursor
+                        oldattributes = attr
                     else:
                         # delay before next update check
                         time.sleep(float(sleep))
