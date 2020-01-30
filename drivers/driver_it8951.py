@@ -262,8 +262,12 @@ class IT8951(DisplayDriver):
         self.write_data_half_word(width)
         self.write_data_half_word(height)
 
+        now = time.time()
         packed_image = self.pack_image(image)
+        print('packing {}x{} took {} seconds'.format(width, height, time.time() - now))
+        now = time.time()
         self.write_data_bytes(packed_image)
+        print('sending data of {}x{} took {} seconds'.format(width, height, time.time() - now))
         self.write_command(self.CMD_LOAD_IMAGE_END)
 
         if update_mode_override is not None:
