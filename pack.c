@@ -1,8 +1,22 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#include "pack_map.h"
 
+void pack_image_bw(PyObject *frame_buffer, char* packed_buffer);
 void pack_image(PyObject *frame_buffer, char* packed_buffer);
 
+void pack_image_bw(PyObject *frame_buffer, char* packed_buffer) {
+    Py_ssize_t size = PySequence_Length(frame_buffer);
+    for (Py_ssize_t i = 0; i < size; i++) {
+        PyObject *pixels = PySequence_ITEM(frame_buffer, i);
+        unsigned char *entry = pack_map[PyLong_AsLong(pixels)];
+        packed_buffer[i * 4] = entry[0];
+        packed_buffer[i * 4 + 1] = entry[1];
+        packed_buffer[i * 4 + 2] = entry[2];
+        packed_buffer[i * 4 + 3] = entry[3];
+        Py_DECREF(pixels);
+    }
+}
 void pack_image(PyObject *frame_buffer, char* packed_buffer) {
     Py_ssize_t size = PySequence_Length(frame_buffer);
     for (Py_ssize_t i = 0; i < size; i += 4) {
@@ -18,3 +32,4 @@ void pack_image(PyObject *frame_buffer, char* packed_buffer) {
         Py_DECREF(pixel3);
     }
 }
+

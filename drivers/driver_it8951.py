@@ -230,7 +230,7 @@ class IT8951(DisplayDriver):
 
         # Initialize the display with a blank image.
         self.wait_for_ready()
-        image = Image.new("L", (self.width, self.height), 0x255)
+        image = Image.new("L", (self.width, self.height), self.white)
         self.draw(0, 0, image, self.DISPLAY_UPDATE_MODE_INIT)
 
     def display_area(self, x, y, w, h, display_mode):
@@ -283,15 +283,29 @@ class IT8951(DisplayDriver):
         self.display_area(x, y, width, height, update_mode)
 
     def pack_image(self, image):
-        image_grey = image.convert("L")
-        img_data = image_grey.getdata()
-        pixel_count = len(img_data)
+        if image.mode == '1':
+            #image = image.convert("L")
+            img_bytes = image.tobytes()
+            pixel_count = len(img_bytes)
 
-        PackedBufferType = ctypes.c_ubyte * (pixel_count // 2)
-        packed_buffer = PackedBufferType()
+            PackedBufferType = ctypes.c_ubyte * (pixel_count * 8 // 2)
+            packed_buffer = PackedBufferType()
 
-        packdll = ctypes.cdll.LoadLibrary('./pack.so')
-        packdll.pack_image.argtypes = [ctypes.py_object, ctypes.POINTER(ctypes.c_ubyte)]
-        packdll.pack_image(img_data, packed_buffer)
+            packdll = ctypes.cdll.LoadLibrary('./pack.so')
+            packdll.pack_image_bw.argtypes = [ctypes.py_object, ctypes.POINTER(ctypes.c_ubyte)]
+            packdll.pack_image_bw(img_bytes, packed_buffer)
 
-        return packed_buffer
+            return packed_buffer
+        else:
+            image = image.convert("L")
+            img_bytes = image.tobytes()
+            pixel_count = len(img_bytes)
+
+            PackedBufferType = ctypes.c_ubyte * (pixel_count * 8 // 2)
+            packed_buffer = PackedBufferType()
+
+            packdll = ctypes.cdll.LoadLibrary('./pack.so')
+            packdll.pack_image.argtypes = [ctypes.py_object, ctypes.POINTER(ctypes.c_ubyte)]
+            packdll.pack_image(img_bytes, packed_buffer)
+
+            return packed_buffer
