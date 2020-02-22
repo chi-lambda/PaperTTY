@@ -18,7 +18,7 @@ import drivers.drivers_color as drivers_color
 import drivers.drivers_colordraw as drivers_colordraw
 import drivers.driver_it8951 as driver_it8951
 
-import Terminal
+from terminal import Terminal
 
 # for ioctl
 import fcntl
@@ -30,7 +30,6 @@ import signal
 import struct
 # for stdin and exit
 import sys
-import select
 # for setting TTY size
 import termios
 # for sleeping
